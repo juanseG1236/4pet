@@ -1,3 +1,4 @@
+import { service } from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -16,15 +17,50 @@ import {
   del,
   requestBody,
   response,
+  HttpErrors,
 } from '@loopback/rest';
-import {Usuario} from '../models';
+import {Credenciales, Usuario} from '../models';
 import {UsuarioRepository} from '../repositories';
+import { AutenticacionService } from '../services';
+const fetch = require('node-fetch');
+
+
 
 export class UsuarioController {
   constructor(
     @repository(UsuarioRepository)
     public usuarioRepository : UsuarioRepository,
+    @service(AutenticacionService)
+    public ServicioAutenticacion : AutenticacionService,
   ) {}
+
+  @post('/identificarPersona' ,{
+    responses:{
+      "200":{
+        description: 'Identificacion de los usuarios'
+      }
+    }
+  })
+  async identificarPersona(
+    @requestBody() credenciales : Credenciales
+  ){
+    let p = await this.ServicioAutenticacion.IdentificarPersona(credenciales.Usuario,credenciales.Contrasena);
+    if (p) {
+      let token = this.ServicioAutenticacion.GenerarTokenJWT(p)
+      return{
+        datos: {
+          nombre: p.nombre,
+          correo: p.correo,
+          id : p.id,
+          rol :p.rol
+        },
+      tk : token
+      }
+      
+    } else {
+      throw new HttpErrors[401]('los datos son invalidos')
+    } 
+   }
 
   @post('/usuarios')
   @response(200, {
@@ -44,7 +80,21 @@ export class UsuarioController {
     })
     usuario: Omit<Usuario, 'id'>,
   ): Promise<Usuario> {
-    return this.usuarioRepository.create(usuario);
+    let clave = this.ServicioAutenticacion.GenerarClave();
+    let ClaveCifrada = this.ServicioAutenticacion.CifrarClave(clave);
+    usuario.contrasena = ClaveCifrada;
+    let p = await this.usuarioRepository.create(usuario);
+
+    //notis//
+    ////
+    let destino = usuario.correo;
+    let asunto = 'Credenciales'
+    let contenido = `Hola ${usuario.nombre} ${usuario.Apellido}, su usuario es ${usuario.correo} y su contrasena es ${usuario.contrasena}`
+    fetch(`http://127.0.0.1:5000/email?destino=${destino}&asunto=${asunto}&contenido=${contenido}`)
+    .then((data:any)=>{
+      console.log(data);
+    })
+  return p;
   }
 
   @get('/usuarios/count')
