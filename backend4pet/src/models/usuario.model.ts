@@ -14,7 +14,7 @@ export class Usuario extends Entity {
     type: 'string',
     required: true,
   })
-  Cedula: string;
+  Csedula: string;
 
   @property({
     type: 'string',
